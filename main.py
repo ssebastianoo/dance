@@ -24,12 +24,33 @@ class Music(commands.Cog):
     async def dance(self, ctx):
         """DANCE DANCE DANCE"""
 
+        if ctx.voice_client is None:
+            if ctx.author.voice:
+                await ctx.author.voice.channel.connect()
+                self.bot.voices[str(ctx.guild.id)] = ctx.author.id
+            else:
+                await ctx.send("You are not connected to a voice channel.")
+                raise commands.CommandError("Author not connected to a voice channel.")
+        elif ctx.voice_client.is_connected():
+            try:
+                user_id = self.bot.voices[str(ctx.guild.id)]
+                user = ctx.guild.get_member(user_id)
+                if user.id != ctx.author.id:
+                    emb = discord.Embed(description = f"You are not the party dj! {user.mention} is!", colour = discord.Colour.red())
+                    await ctx.send(embed = emb)
+                else:
+                    ctx.voice_client.stop()
+            except KeyError:
+                self.bot.voices[str(ctx.guild.id)] = ctx.author.id
+                ctx.voice_client.stop()
+            
         query = "dance"
 
         if not ".mp3" in query:
             query += ".mp3"
 
         v = ctx.voice_client
+
         source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(query))
         v.play(source, after=lambda e: print('Player error: %s' % e) if e else None)
 
@@ -54,25 +75,31 @@ class Music(commands.Cog):
     async def stop(self, ctx):
         """Stop dancing"""
 
+        if ctx.voice_client is None:
+            emb = discord.Embed(description = "I'm not dancing!", colour = discord.Colour.red())
+            await ctx.send(embed = emb)
+        elif ctx.voice_client.is_playing():
+            try:
+                user_id = self.bot.voices[str(ctx.guild.id)]
+                user = ctx.guild.get_member(user_id)
+                if user.id != ctx.author.id:
+                    emb = discord.Embed(description = f"You are not the party dj! {user.mention} is!", colour = discord.Colour.red())
+                    return await ctx.send(embed = emb)
+                else:
+                    ctx.voice_client.stop()
+                    self.bot.voices.pop(str(ctx.guild.id))
+            except KeyError:
+                ctx.voice_client.stop()
+
         await ctx.voice_client.disconnect()
 
         emb = discord.Embed(description = "no more dance", colour = discord.Colour.blurple())
         await ctx.send(embed = emb)
 
-    @dance.before_invoke
-    async def ensure_voice(self, ctx):
-        if ctx.voice_client is None:
-            if ctx.author.voice:
-                await ctx.author.voice.channel.connect()
-            else:
-                await ctx.send("You are not connected to a voice channel.")
-                raise commands.CommandError("Author not connected to a voice channel.")
-        elif ctx.voice_client.is_playing():
-            ctx.voice_client.stop()
-
 bot = commands.Bot(command_prefix=commands.when_mentioned_or("d/"), description='DANCE DANCE')
 bot.remove_command("help")
 bot.load_extension("jishaku")
+bot.voices = {}
 
 @bot.event
 async def on_ready():
@@ -111,7 +138,7 @@ async def help(ctx, *, command = None):
 @bot.command()
 async def invite(ctx):
     "DANCE in your server"
-    return await ctx.send(discord.utils.oauth_url(bot.user.id))
+    await ctx.send(discord.utils.oauth_url(bot.user.id))
 
 bot.add_cog(Music(bot))
-bot.run('token')
+bot.run('')
